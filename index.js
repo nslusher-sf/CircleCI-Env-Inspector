@@ -7,6 +7,7 @@ import {
   getRepos,
   getProjectVariables,
   resolveVcsSlug,
+  getSshCheckoutKeys
 } from "./utils.js";
 import * as fs from "fs";
 
@@ -195,6 +196,12 @@ const repoData = await Promise.all(
       repo,
       vcsSlug
     );
+    let sshCheckoutKeys = await getSshCheckoutKeys(
+        CIRCLE_V2_API,
+        CIRCLE_TOKEN,
+        vcsSlug,
+        repo
+    )
     if (resProjectVars.response.status === 429) {
       let waitTime = 1;
       let multiplier = 2;
@@ -220,10 +227,10 @@ const repoData = await Promise.all(
       } while (resProjectVars.response.status === 429 && count++ < maxRetries);
     } else if (resProjectVars.response.status != 200)
       USER_DATA.unavailable.push(repo);
-    return { name: repo, variables: resProjectVars?.responseBody?.items };
+    return { name: repo, variables: resProjectVars?.responseBody?.items, sshCheckoutKeys: sshCheckoutKeys?.responseBody?.items };
   })
 );
-USER_DATA.projects = repoData.filter((repo) => repo?.variables?.length > 0);
+USER_DATA.projects = repoData.filter((repo) => repo?.variables?.length > 0 || repo?.sshCheckoutKeys?.length > 0);
 
 fs.writeFileSync("circleci-data.json", JSON.stringify(USER_DATA, null, 2));
 console.log("Log created at circleci-data.json");

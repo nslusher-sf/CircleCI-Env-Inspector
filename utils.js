@@ -17,6 +17,13 @@ export async function getContexts(api, token, ownerID, pageToken) {
   return fetchWithToken(url, token, "circleci");
 }
 
+export async function getSshCheckoutKeys(api, token, vcs, repo, pageToken) {
+  const url = pageToken
+  ? `${api}/project/${vcs}/${repo}/checkout-key&page-token=${pageToken}`
+  : `${api}/project/${vcs}/${repo}/checkout-key`;
+  return fetchWithToken(url, token, "circleci");
+}
+
 export async function getContextVariables(api, token, contextID, pageToken) {
   const url = pageToken
     ? `${api}/context/${contextID}/environment-variable?page-token=${pageToken}`
