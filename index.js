@@ -165,12 +165,16 @@ const getRepoList = async (api, token, accountName) => {
     const reducer =
       VCS === "GitHub"
         ? (acc, curr) => [...acc, curr.full_name]
-        : (acc, curr) => [...acc, `${curr.username}/${curr.reponame}`];
+        : (acc, curr) => [...acc, `${curr.username}/${curr.name}`];
 
-    if (responseBody.length > 0)
-      items.push(...responseBody.reduce(reducer, []));
+    let results = responseBody;
+    if (VCS === "Bitbucket") {
+      results = responseBody.filter(r => r.username === accountName);
+    }
+    if (results.length > 0)
+      items.push(...results.reduce(reducer, []));
     // CircleCI only requires one request to get all repos.
-    if (responseBody.length === 0 || source === "circleci") keepGoing = false;
+    if (results.length === 0 || source === "circleci") keepGoing = false;
     pageToken++;
   } while (keepGoing);
 

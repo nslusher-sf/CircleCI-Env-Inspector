@@ -27,7 +27,7 @@ export async function getContextVariables(api, token, contextID, pageToken) {
 export async function getRepos(api, token, slug, pageToken) {
   const url = api.includes("github")
     ? `${api}/${slug}/repos?per_page=100&page=${pageToken}`
-    : `${api}/projects`;
+    : `${api}/${slug}/repos/bitbucket`;
   return api.includes("github")
     ? fetchWithToken(url, token, "github")
     : fetchWithToken(url, token, "circleci");
