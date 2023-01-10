@@ -187,6 +187,7 @@ const repoList =
     : await getRepoList(CIRCLE_V1_API, CIRCLE_TOKEN, answers.account);
 
 console.log("Getting Projects Variables...");
+let unavailable = new Set();
 const repoData = await Promise.all(
   repoList.map(async (repo) => {
     const vcsSlug = resolveVcsSlug(VCS);
@@ -196,12 +197,6 @@ const repoData = await Promise.all(
       repo,
       vcsSlug
     );
-    let sshCheckoutKeys = await getSshCheckoutKeys(
-        CIRCLE_V2_API,
-        CIRCLE_TOKEN,
-        vcsSlug,
-        repo
-    )
     if (resProjectVars.response.status === 429) {
       let waitTime = 1;
       let multiplier = 2;
@@ -225,8 +220,43 @@ const repoData = await Promise.all(
         );
         if (waitTime < maxWait) waitTime *= multiplier;
       } while (resProjectVars.response.status === 429 && count++ < maxRetries);
-    } else if (resProjectVars.response.status != 200)
-      USER_DATA.unavailable.push(repo);
+    }
+    if (resProjectVars.response.status != 200)
+      unavailable.add(repo);
+
+    let sshCheckoutKeys = await getSshCheckoutKeys(
+        CIRCLE_V2_API,
+        CIRCLE_TOKEN,
+        vcsSlug,
+        repo
+    );
+    if (sshCheckoutKeys.response.status === 429) {
+      let waitTime = 1;
+      let multiplier = 2;
+      let count = 0;
+      let maxWait = 300;
+      let maxRetries = 30;
+      do {
+        const retryAfterHeader =
+            resProjectVars.response.headers.get("retry-after");
+        const retryAfter =
+            !retryAfterHeader && retryAfterHeader > 0
+                ? retryAfterHeader
+                : waitTime;
+        console.dir(`Waiting ${retryAfter} seconds. Retry #${count}`);
+        sshCheckoutKeys = await getSshCheckoutKeys(
+            CIRCLE_V2_API,
+            CIRCLE_TOKEN,
+            vcsSlug,
+            repo
+        );
+        if (waitTime < maxWait) waitTime *= multiplier;
+      } while (sshCheckoutKeys.response.status === 429 && count++ < maxRetries);
+    }
+    if (sshCheckoutKeys.response.status != 200)
+      unavailable.add(repo);
+
+    USER_DATA.unavailable = Array.from(unavailable).sort();
     return { name: repo, variables: resProjectVars?.responseBody?.items, sshCheckoutKeys: sshCheckoutKeys?.responseBody?.items };
   })
 );
