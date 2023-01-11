@@ -7,7 +7,8 @@ import {
   getRepos,
   getProjectVariables,
   resolveVcsSlug,
-  getSshCheckoutKeys
+  getSshCheckoutKeys,
+  getAdditionalSshKeys
 } from "./utils.js";
 import * as fs from "fs";
 
@@ -186,10 +187,12 @@ const repoList =
     ? await getRepoList(GITHUB_API, GITHUB_TOKEN, answers.account)
     : await getRepoList(CIRCLE_V1_API, CIRCLE_TOKEN, answers.account);
 
-console.log("Getting Projects Variables...");
-let unavailable = new Set();
+console.log("Getting Projects Variables and SSH Keys...");
+let unavailable = new Object();
 const repoData = await Promise.all(
   repoList.map(async (repo) => {
+    let unavailableReasons = [];
+    await new Promise(r => setTimeout(r, Math.floor(Math.random() * 2000)));
     const vcsSlug = resolveVcsSlug(VCS);
     let resProjectVars = await getProjectVariables(
       CIRCLE_V2_API,
@@ -222,7 +225,7 @@ const repoData = await Promise.all(
       } while (resProjectVars.response.status === 429 && count++ < maxRetries);
     }
     if (resProjectVars.response.status != 200)
-      unavailable.add(repo);
+        unavailableReasons.push(`Project environment variables: ${resProjectVars.response.status} - ${resProjectVars.response.statusText}`);
 
     let sshCheckoutKeys = await getSshCheckoutKeys(
         CIRCLE_V2_API,
@@ -254,10 +257,49 @@ const repoData = await Promise.all(
       } while (sshCheckoutKeys.response.status === 429 && count++ < maxRetries);
     }
     if (sshCheckoutKeys.response.status != 200)
-      unavailable.add(repo);
+        unavailableReasons.push(`SSH checkout keys: ${sshCheckoutKeys.response.status} - ${sshCheckoutKeys.response.statusText}`);
+    if (sshCheckoutKeys.response.status === 200 && sshCheckoutKeys.responseBody.next_page_token != null)
+      throw new Error("Paging for getSshCheckoutKeys not yet implemented.");
 
-    USER_DATA.unavailable = Array.from(unavailable).sort();
-    return { name: repo, variables: resProjectVars?.responseBody?.items, sshCheckoutKeys: sshCheckoutKeys?.responseBody?.items };
+    let additionalSshKeys = await getAdditionalSshKeys(
+      CIRCLE_V1_API,
+      CIRCLE_TOKEN,
+      VCS.toLowerCase(),
+      repo
+    );
+    if (additionalSshKeys.response.status === 429) {
+      let waitTime = 1;
+      let multiplier = 2;
+      let count = 0;
+      let maxWait = 300;
+      let maxRetries = 30;
+      do {
+        const retryAfterHeader =
+            resProjectVars.response.headers.get("retry-after");
+        const retryAfter =
+            !retryAfterHeader && retryAfterHeader > 0
+                ? retryAfterHeader
+                : waitTime;
+        console.dir(`Waiting ${retryAfter} seconds. Retry #${count}`);
+        additionalSshKeys = await getAdditionalSshKeys(
+            CIRCLE_V1_API,
+            CIRCLE_TOKEN,
+            VCS.toLowerCase(),
+            repo
+        );
+        if (waitTime < maxWait) waitTime *= multiplier;
+      } while (additionalSshKeys.response.status === 429 && count++ < maxRetries);
+    }
+    if (additionalSshKeys.response.status != 200)
+        unavailableReasons.push(`Additional SSH keys: ${additionalSshKeys.response.status} - ${additionalSshKeys.response.statusText}`);
+    if (unavailableReasons.length > 0)
+        unavailable[repo] = unavailableReasons;
+
+    USER_DATA.unavailable = unavailable;
+    return { name: repo, variables: resProjectVars?.responseBody?.items,
+      sshCheckoutKeys: sshCheckoutKeys?.responseBody?.items,
+      additionalSshKeys: additionalSshKeys?.responseBody?.ssh_keys
+    };
   })
 );
 USER_DATA.projects = repoData.filter((repo) => repo?.variables?.length > 0 || repo?.sshCheckoutKeys?.length > 0);
