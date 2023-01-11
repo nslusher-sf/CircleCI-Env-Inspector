@@ -166,7 +166,7 @@ const getRepoList = async (api, token, accountName) => {
     const reducer =
       VCS === "GitHub"
         ? (acc, curr) => [...acc, curr.full_name]
-        : (acc, curr) => [...acc, `${curr.username}/${curr.name}`];
+        : (acc, curr) => [...acc, `${curr.username}/${curr.vcs_url.replace(`https://bitbucket.org/${accountName}/`, "")}`];
 
     let results = responseBody;
     if (VCS === "Bitbucket") {
