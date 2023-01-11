@@ -302,7 +302,7 @@ const repoData = await Promise.all(
     };
   })
 );
-USER_DATA.projects = repoData.filter((repo) => repo?.variables?.length > 0 || repo?.sshCheckoutKeys?.length > 0);
+USER_DATA.projects = repoData.filter((repo) => repo?.variables?.length > 0 || repo?.sshCheckoutKeys?.length > 0 || repo?.additionalSshKeys?.length > 0);
 
 fs.writeFileSync("circleci-data.json", JSON.stringify(USER_DATA, null, 2));
 console.log("Log created at circleci-data.json");
